@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Restaurant Ordering System</title>
+    <style>
+        body{font-family:Arial,sans-serif;margin:0;background:#f6f3ee;color:#222;}
+        header{background:#7a2e1d;color:#fff;padding:16px 24px;}
+        h1{margin:0;font-size:24px;}
+        main{display:flex;flex-wrap:wrap;gap:24px;padding:24px;}
+        section{background:#fff;border-radius:8px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,0.15);}
+        #menu{flex:2 1 420px;}
+        #cart,#status{flex:1 1 300px;}
+        .card{border:1px solid #ddd;border-radius:6px;padding:12px;margin-bottom:12px;}
+        .card h3{margin:0 0 4px;}
+        .card label,#cart label{display:block;margin:4px 0;}
+        button{background:#7a2e1d;color:#fff;border:none;border-radius:4px;padding:8px 12px;cursor:pointer;}
+        button:disabled{background:#aaa;cursor:default;}
+        textarea{width:100%;box-sizing:border-box;}
+        .error{color:#b00020;min-height:1.2em;}
+        #items li{margin-bottom:4px;}
+        #items button{padding:2px 6px;margin-left:8px;}
+        .badge{display:inline-block;padding:2px 10px;border-radius:12px;background:#e6d5b8;font-weight:bold;}
+    </style>
+</head>
+<body>
+<header>
+    <h1>Restaurant Ordering System</h1>
+</header>
+<main>
+    <section id="menu">
+        <h2>Menu</h2>
+        <div id="meals"></div>
+    </section>
+    <section id="cart">
+        <h2>Your order</h2>
+        <ul id="items"></ul>
+        <p>Subtotal: <strong id="subtotal">0</strong> &#8376;</p>
+        <label><input type="radio" name="type" value="DINE_IN" checked> Dine-in</label>
+        <label><input type="radio" name="type" value="TAKEAWAY"> Takeaway</label>
+        <label id="tableRow">Table (1-99) <input type="number" id="table" min="1" max="99" value="1"></label>
+        <label>Comment for the kitchen <textarea id="comment" rows="2"></textarea></label>
+        <button id="place">Place order</button>
+        <p id="error" class="error"></p>
+    </section>
+    <section id="status" hidden>
+        <h2>Order <span id="orderId"></span></h2>
+        <p>Status: <span id="orderStatus" class="badge"></span></p>
+        <p id="orderPlace"></p>
+        <ul id="orderMeals"></ul>
+        <p>Total: <strong id="orderTotal"></strong> &#8376;</p>
+        <button id="advance">Move to next status</button>
+        <h3>Notifications</h3>
+        <ul id="notifications"></ul>
+    </section>
+</main>
+<script>
+    let menu=null;
+    let currentOrderId=null;
+    const cart=[];
+    function byId(id){
+        return document.getElementById(id);
+    }
+    async function loadMenu(){
+        const response=await fetch('/api/menu');
+        menu=await response.json();
+        renderMenu();
+    }
+    function renderMenu(){
+        const container=byId('meals');
+        container.innerHTML='';
+        for(const meal of menu.meals){
+            const card=document.createElement('div');
+            card.className='card';
+            const title=document.createElement('h3');
+            title.textContent=meal.description;
+            const price=document.createElement('p');
+            price.textContent=meal.price+' \u20b8';
+            card.append(title,price);
+            const checkboxes=[];
+            if(meal.allowsToppings){
+                for(const topping of menu.toppings){
+                    const label=document.createElement('label');
+                    const checkbox=document.createElement('input');
+                    checkbox.type='checkbox';
+                    checkbox.value=topping.id;
+                    label.append(checkbox,' '+topping.title+' (+'+topping.price+')');
+                    card.append(label);
+                    checkboxes.push(checkbox);
+                }
+            }
+            const addButton=document.createElement('button');
+            addButton.textContent='Add to order';
+            addButton.onclick=()=>{
+                const chosen=checkboxes.filter(box=>box.checked);
+                addToCart(meal,chosen.map(box=>box.value));
+                chosen.forEach(box=>{box.checked=false;});
+            };
+            card.append(addButton);
+            container.append(card);
+        }
+    }
+    function addToCart(meal,toppingIds){
+        const chosen=menu.toppings.filter(topping=>toppingIds.includes(topping.id));
+        const extra=chosen.reduce((sum,topping)=>sum+topping.price,0);
+        const text=[meal.description,...chosen.map(topping=>topping.title.toLowerCase())].join(' + ');
+        cart.push({type:meal.type,toppings:toppingIds,text:text,price:meal.price+extra});
+        renderCart();
+    }
+    function renderCart(){
+        const list=byId('items');
+        list.innerHTML='';
+        cart.forEach((item,index)=>{
+            const row=document.createElement('li');
+            row.textContent=item.text+' - '+item.price;
+            const remove=document.createElement('button');
+            remove.textContent='x';
+            remove.onclick=()=>{
+                cart.splice(index,1);
+                renderCart();
+            };
+            row.append(remove);
+            list.append(row);
+        });
+        byId('subtotal').textContent=cart.reduce((sum,item)=>sum+item.price,0);
+    }
+    function selectedType(){
+        return document.querySelector('input[name="type"]:checked').value;
+    }
+    async function placeOrder(){
+        byId('error').textContent='';
+        const params=new URLSearchParams();
+        params.set('type',selectedType());
+        if(selectedType()==='DINE_IN'){
+            params.set('table',byId('table').value);
+        }
+        params.set('comment',byId('comment').value);
+        for(const item of cart){
+            params.append('meal',item.toppings.length>0?item.type+':'+item.toppings.join(','):item.type);
+        }
+        const response=await fetch('/api/orders',{method:'POST',body:params});
+        const data=await response.json();
+        if(!response.ok){
+            byId('error').textContent=data.error;
+            return;
+        }
+        cart.length=0;
+        renderCart();
+        showOrder(data);
+    }
+    async function advanceOrder(){
+        const response=await fetch('/api/orders/'+currentOrderId+'/advance',{method:'POST'});
+        showOrder(await response.json());
+    }
+    function showOrder(order){
+        currentOrderId=order.id;
+        byId('status').hidden=false;
+        byId('orderId').textContent='#'+order.id;
+        byId('orderStatus').textContent=order.status;
+        byId('orderPlace').textContent=order.type==='DINE_IN'?'Dine-in, table '+order.table:'Takeaway';
+        byId('orderTotal').textContent=order.total;
+        byId('advance').disabled=order.status==='DELIVERED';
+        fillList('orderMeals',order.meals.map(meal=>meal.description+' - '+meal.price));
+        fillList('notifications',order.notifications);
+    }
+    function fillList(id,texts){
+        const list=byId(id);
+        list.innerHTML='';
+        for(const text of texts){
+            const item=document.createElement('li');
+            item.textContent=text;
+            list.append(item);
+        }
+    }
+    function updateTableRow(){
+        byId('tableRow').hidden=selectedType()!=='DINE_IN';
+    }
+    document.querySelectorAll('input[name="type"]').forEach(radio=>radio.addEventListener('change',updateTableRow));
+    byId('place').onclick=placeOrder;
+    byId('advance').onclick=advanceOrder;
+    loadMenu();
+</script>
+</body>
+</html>
