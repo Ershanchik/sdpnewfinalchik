@@ -1,4 +1,6 @@
 package com.restaurant.model;
+import com.restaurant.decorator.Bacon;
+import com.restaurant.factory.MealFactory;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 class OrderTest {
@@ -34,5 +36,13 @@ class OrderTest {
         order.addMeal(new TestMeal("Pizza",3500));
         order.addMeal(new TestMeal("Cola",600));
         assertEquals(4100,order.getTotal(),0.001);
+    }
+    @Test
+    void totalIncludesToppingsOfDecoratedMeals(){
+        MealFactory factory=new MealFactory();
+        Order order=new Order(1);
+        order.addMeal(new Bacon(factory.createMeal(MealType.BURGER)));
+        order.addMeal(factory.createMeal(MealType.DRINK));
+        assertEquals(4000,order.getTotal(),0.001);
     }
 }

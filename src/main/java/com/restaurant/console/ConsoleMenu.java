@@ -1,27 +1,53 @@
+
 package com.restaurant.console;
+import com.restaurant.builder.OrderBuilder;
+import com.restaurant.decorator.Topping;
 import com.restaurant.factory.MealFactory;
 import com.restaurant.model.Meal;
 import com.restaurant.model.MealType;
 import com.restaurant.model.Order;
+import com.restaurant.model.OrderType;
 import java.util.Scanner;
 public class ConsoleMenu {
     private final MealFactory factory=new MealFactory();
     private final Scanner scanner=new Scanner(System.in);
+    private int nextOrderId=1;
     public void run(){
-        Order order=new Order(1);
+        OrderBuilder builder=new OrderBuilder(nextOrderId++);
+        askOrderDetails(builder);
         MealType[] types=MealType.values();
+        int mealCount=0;
         while(true){
             printMenu(types);
-            int choice=readChoice(types.length);
+            int choice=readNumber("Your choice: ",0,types.length);
             if(choice==0){
+                if(mealCount==0){
+                    System.out.println("Add at least one meal first.");
+                    continue;
+                }
                 break;
             }
-            Meal meal=factory.createMeal(types[choice-1]);
-            order.addMeal(meal);
+            MealType type=types[choice-1];
+            Meal meal=factory.createMeal(type);
+            if(type.allowsToppings())meal=chooseToppings(meal);
+            builder.addMeal(meal);
+            mealCount++;
             System.out.println("Added: "+meal.getDescription());
         }
+        Order order=builder.build();
         System.out.println();
         System.out.print(OrderPrinter.format(order));
+    }
+    private void askOrderDetails(OrderBuilder builder){
+        int typeChoice=readNumber("Order type (1 - dine-in, 2 - takeaway): ",1,2);
+        if(typeChoice==1){
+            builder.type(OrderType.DINE_IN);
+            builder.table(readNumber("Table number (1-99): ",1,99));
+        }else{
+            builder.type(OrderType.TAKEAWAY);
+        }
+        System.out.print("Comment for the kitchen (Enter to skip): ");
+        builder.comment(scanner.nextLine());
     }
     private void printMenu(MealType[] types){
         System.out.println();
@@ -31,17 +57,30 @@ public class ConsoleMenu {
         }
         System.out.println("0. Finish order");
     }
-    private int readChoice(int max){
+    private Meal chooseToppings(Meal meal){
+        Topping[] toppings=Topping.values();
         while(true){
-            System.out.print("Your choice: ");
+            System.out.println("Toppings:");
+            for(int i=0;i<toppings.length;i++){
+                System.out.printf("%d. %s (+%.0f)%n",i+1,toppings[i].getTitle(),toppings[i].getPrice());
+            }
+            System.out.println("0. No more toppings");
+            int choice=readNumber("Add topping: ",0,toppings.length);
+            if(choice==0){
+                return meal;
+            }
+            meal=toppings[choice-1].applyTo(meal);
+        }
+    }
+    private int readNumber(String prompt,int min,int max){
+        while(true){
+            System.out.print(prompt);
             String line=scanner.nextLine().trim();
             if(line.matches("\\d{1,2}")){
-                int choice=Integer.parseInt(line);
-                if(choice<=max){
-                    return choice;
-                }
+                int number=Integer.parseInt(line);
+                if(number>=min&&number<=max)return number;
             }
-            System.out.println("Please enter a number from 0 to "+max);
+            System.out.println("Please enter a number from "+min+" to "+max);
         }
     }
 }
