@@ -1,14 +1,11 @@
 package com.restaurant.web;
-import com.restaurant.builder.OrderBuilder;
 import com.restaurant.decorator.Topping;
 import com.restaurant.discount.DiscountOption;
-import com.restaurant.factory.MealFactory;
+import com.restaurant.facade.RestaurantFacade;
 import com.restaurant.model.Meal;
 import com.restaurant.model.MealType;
 import com.restaurant.model.Order;
 import com.restaurant.model.OrderType;
-import com.restaurant.observer.CustomerNotifier;
-import com.restaurant.observer.KitchenDisplay;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
@@ -17,18 +14,12 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 public class WebServer{
     private static final String JSON="application/json; charset=utf-8";
-    // HttpServer runs handlers one by one on its default executor, so plain collections are enough here
-    private final Map<Integer,TrackedOrder> orders=new HashMap<>();
-    private final MealFactory factory=new MealFactory();
+    private final RestaurantFacade facade=new RestaurantFacade();
     private final HttpServer server;
-    private int nextOrderId=1;
-    private record TrackedOrder(Order order,List<String> notifications){
-    }
     public WebServer(int port) throws IOException{
         server=HttpServer.create(new InetSocketAddress(port),0);
         server.createContext("/",this::handlePage);
@@ -50,7 +41,7 @@ public class WebServer{
             send(exchange,404,"Not found","text/plain; charset=utf-8");
             return;
         }
-        try (InputStream page=WebServer.class.getResourceAsStream("/web/index.html")){
+        try(InputStream page=WebServer.class.getResourceAsStream("/web/index.html")){
             if(page==null){
                 send(exchange,500,"index.html is missing","text/plain; charset=utf-8");
                 return;
@@ -59,7 +50,7 @@ public class WebServer{
         }
     }
     private void handleMenu(HttpExchange exchange) throws IOException{
-        send(exchange,200,OrderJson.menu(factory),JSON);
+        send(exchange,200,OrderJson.menu(facade::createMeal),JSON);
     }
     private void handleOrders(HttpExchange exchange) throws IOException{
         String path=exchange.getRequestURI().getPath();
@@ -70,18 +61,17 @@ public class WebServer{
                 return;
             }
             String[] parts=path.split("/");
-            TrackedOrder tracked=parts.length>=4 ? findOrder(parts[3]) : null;
-            if(tracked==null){
+            Optional<Order> found=parts.length>=4?findOrder(parts[3]):Optional.empty();
+            if(found.isEmpty()){
                 send(exchange,404,OrderJson.error("Order not found"),JSON);
-            } else if(parts.length==4&&method.equals("GET")){
-                send(exchange,200,OrderJson.order(tracked.order(),tracked.notifications()),JSON);
-            } else if(parts.length==5&&parts[4].equals("advance")&&method.equals("POST")){
-                tracked.order().advanceStatus();
-                send(exchange,200,OrderJson.order(tracked.order(),tracked.notifications()),JSON);
-            } else{
+            }else if(parts.length==4&&method.equals("GET")){
+                send(exchange,200,orderJson(found.get()),JSON);
+            }else if(parts.length==5&&parts[4].equals("advance")&&method.equals("POST")){
+                send(exchange,200,orderJson(facade.advanceOrder(found.get().getId())),JSON);
+            }else{
                 send(exchange,405,OrderJson.error("Method not allowed"),JSON);
             }
-        } catch(IllegalArgumentException | IllegalStateException e){
+        }catch(IllegalArgumentException|IllegalStateException e){
             send(exchange,400,OrderJson.error(e.getMessage()),JSON);
         }
     }
@@ -89,52 +79,46 @@ public class WebServer{
         String body=new String(exchange.getRequestBody().readAllBytes(),StandardCharsets.UTF_8);
         FormData form=FormData.parse(body);
         OrderType type=parseEnum(OrderType.class,form.get("type","DINE_IN"),"order type");
-        OrderBuilder builder=new OrderBuilder(nextOrderId).type(type).comment(form.get("comment",""));
         DiscountOption discount=parseEnum(DiscountOption.class,form.get("discount","NONE"),"discount");
-        builder.discount(discount.createStrategy());
+        int table=0;
         if(type==OrderType.DINE_IN){
-            String table=form.get("table","0");
-            if(!table.matches("\\d{1,2}")){
+            String tableText=form.get("table","0");
+            if(!tableText.matches("\\d{1,2}")){
                 throw new IllegalArgumentException("Table number must be a number from 1 to 99");
             }
-            builder.table(Integer.parseInt(table));
+            table=Integer.parseInt(tableText);
         }
-        for(String entry : form.getAll("meal")){
-            builder.addMeal(parseMeal(entry));
+        List<Meal> meals=new ArrayList<>();
+        for(String entry:form.getAll("meal")){
+            meals.add(parseMeal(entry));
         }
-        Order order=builder.build();
-        nextOrderId++;
-        List<String> notifications=new ArrayList<>();
-        order.addObserver(new KitchenDisplay(notifications::add));
-        order.addObserver(new CustomerNotifier(notifications::add));
-        orders.put(order.getId(),new TrackedOrder(order,notifications));
-        send(exchange,201,OrderJson.order(order,notifications),JSON);
+        Order order=facade.placeOrder(type,table,form.get("comment",""),discount,meals);
+        send(exchange,201,orderJson(order),JSON);
     }
-    // entry looks like "PIZZA" or "PIZZA:EXTRA_CHEESE,BACON"
     private Meal parseMeal(String entry){
         String[] parts=entry.split(":",2);
         MealType type=parseEnum(MealType.class,parts[0],"meal");
-        Meal meal=factory.createMeal(type);
+        List<Topping> toppings=new ArrayList<>();
         if(parts.length==2&&!parts[1].isEmpty()){
-            if(!type.allowsToppings()){
-                throw new IllegalArgumentException(type.getTitle()+" cannot have toppings");
-            }
-            for(String name : parts[1].split(",")){
-                meal=parseEnum(Topping.class,name,"topping").applyTo(meal);
+            for(String name:parts[1].split(",")){
+                toppings.add(parseEnum(Topping.class,name,"topping"));
             }
         }
-        return meal;
+        return facade.createMeal(type,toppings);
     }
-    private TrackedOrder findOrder(String idText){
+    private Optional<Order> findOrder(String idText){
         if(!idText.matches("\\d{1,9}")){
-            return null;
+            return Optional.empty();
         }
-        return orders.get(Integer.parseInt(idText));
+        return facade.findOrder(Integer.parseInt(idText));
+    }
+    private String orderJson(Order order){
+        return OrderJson.order(order,facade.getNotifications(order.getId()));
     }
     private static <E extends Enum<E>> E parseEnum(Class<E> type,String value,String what){
         try{
             return Enum.valueOf(type,value);
-        } catch(IllegalArgumentException e){
+        }catch(IllegalArgumentException e){
             throw new IllegalArgumentException("Unknown "+what+": "+value);
         }
     }
@@ -142,7 +126,7 @@ public class WebServer{
         byte[] bytes=body.getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().set("Content-Type",contentType);
         exchange.sendResponseHeaders(status,bytes.length);
-        try (OutputStream out=exchange.getResponseBody()){
+        try(OutputStream out=exchange.getResponseBody()){
             out.write(bytes);
         }
     }

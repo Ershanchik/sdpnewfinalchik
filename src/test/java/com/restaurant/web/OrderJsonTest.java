@@ -13,7 +13,7 @@ class OrderJsonTest{
     private final MealFactory factory=new MealFactory();
     @Test
     void menuContainsMealsAndToppings(){
-        String json=OrderJson.menu(factory);
+        String json=OrderJson.menu(factory::createMeal);
         assertTrue(json.contains("\"type\":\"PIZZA\""));
         assertTrue(json.contains("\"allowsToppings\":false"));
         assertTrue(json.contains("\"id\":\"EXTRA_CHEESE\""));
@@ -41,7 +41,7 @@ class OrderJsonTest{
     }
     @Test
     void menuContainsDiscountOptions(){
-        String json=OrderJson.menu(factory);
+        String json=OrderJson.menu(factory::createMeal);
         assertTrue(json.contains("\"id\":\"HAPPY_HOUR\""));
         assertTrue(json.contains("Happy hour"));
     }

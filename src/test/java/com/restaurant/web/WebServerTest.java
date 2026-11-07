@@ -86,4 +86,17 @@ class WebServerTest{
     void unknownDiscountIsRejected() throws Exception{
         assertEquals(400,post("/api/orders","type=TAKEAWAY&discount=FREE&meal=DRINK").statusCode());
     }
+
+    @Test
+    void orderMovesThroughAllStatuses() throws Exception{
+        post("/api/orders","type=TAKEAWAY&meal=PASTA");
+        post("/api/orders/1/advance","");
+        post("/api/orders/1/advance","");
+        HttpResponse<String> delivered=post("/api/orders/1/advance","");
+        HttpResponse<String> extra=post("/api/orders/1/advance","");
+        assertTrue(delivered.body().contains("\"status\":\"DELIVERED\""));
+        assertTrue(delivered.body().contains("Customer: order #1 delivered, enjoy your meal"));
+        assertEquals(delivered.body(),extra.body());
+        assertEquals(extra.body(),get("/api/orders/1").body());
+    }
 }
