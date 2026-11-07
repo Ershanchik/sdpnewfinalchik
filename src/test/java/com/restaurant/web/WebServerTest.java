@@ -1,4 +1,3 @@
-
 package com.restaurant.web;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -75,5 +74,16 @@ class WebServerTest{
     @Test
     void unknownOrderIsNotFound() throws Exception{
         assertEquals(404,get("/api/orders/99").statusCode());
+    }
+    @Test
+    void chosenDiscountIsAppliedToTotal() throws Exception{
+        HttpResponse<String>response=post("/api/orders","type=TAKEAWAY&discount=STUDENT&meal=PIZZA&meal=DRINK");
+        assertEquals(201,response.statusCode());
+        assertTrue(response.body().contains("\"discount\":410"));
+        assertTrue(response.body().contains("\"total\":3690"));
+    }
+    @Test
+    void unknownDiscountIsRejected() throws Exception{
+        assertEquals(400,post("/api/orders","type=TAKEAWAY&discount=FREE&meal=DRINK").statusCode());
     }
 }

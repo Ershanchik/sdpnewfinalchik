@@ -1,4 +1,5 @@
 package com.restaurant.builder;
+import com.restaurant.discount.HappyHourDiscount;
 import com.restaurant.factory.MealFactory;
 import com.restaurant.model.MealType;
 import com.restaurant.model.Order;
@@ -52,5 +53,25 @@ class OrderBuilderTest {
     void dineInOrderWithoutTableIsRejected(){
         OrderBuilder builder=new OrderBuilder(1).addMeal(factory.createMeal(MealType.PIZZA));
         assertThrows(IllegalStateException.class,builder::build);
+    }
+    @Test
+    void builtOrderUsesChosenDiscount(){
+        Order order=new OrderBuilder(1)
+                .table(1)
+                .discount(new HappyHourDiscount())
+                .addMeal(factory.createMeal(MealType.PIZZA))
+                .addMeal(factory.createMeal(MealType.DRINK))
+                .addMeal(factory.createMeal(MealType.DRINK))
+                .build();
+        assertEquals(600,order.getDiscountAmount(),0.001);
+        assertEquals(4100,order.getTotal(),0.001);
+    }
+    @Test
+    void orderWithoutChosenDiscountHasNone(){
+        Order order=new OrderBuilder(1)
+                .table(1)
+                .addMeal(factory.createMeal(MealType.PIZZA))
+                .build();
+        assertEquals(0,order.getDiscountAmount(),0.001);
     }
 }

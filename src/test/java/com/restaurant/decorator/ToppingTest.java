@@ -1,4 +1,3 @@
-
 package com.restaurant.decorator;
 import com.restaurant.factory.MealFactory;
 import com.restaurant.model.Meal;
@@ -11,7 +10,7 @@ class ToppingTest{
     @Test
     void applyingToppingAddsItsPrice(){
         Meal pizza=factory.createMeal(MealType.PIZZA);
-        for(Topping topping:Topping.values()){
+        for(Topping topping : Topping.values()){
             Meal decorated=topping.applyTo(pizza);
             assertEquals(pizza.getPrice()+topping.getPrice(),decorated.getPrice(),0.001);
         }
@@ -19,7 +18,7 @@ class ToppingTest{
     @Test
     void everyToppingChangesDescription(){
         Meal pizza=factory.createMeal(MealType.PIZZA);
-        for(Topping topping:Topping.values()){
+        for(Topping topping : Topping.values()){
             assertTrue(topping.applyTo(pizza).getDescription().startsWith(pizza.getDescription()+" + "));
         }
     }

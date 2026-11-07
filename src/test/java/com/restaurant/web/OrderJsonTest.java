@@ -1,5 +1,6 @@
 package com.restaurant.web;
 import com.restaurant.builder.OrderBuilder;
+import com.restaurant.discount.StudentDiscount;
 import com.restaurant.factory.MealFactory;
 import com.restaurant.model.MealType;
 import com.restaurant.model.Order;
@@ -37,5 +38,24 @@ class OrderJsonTest{
     void quoteEscapesSpecialCharacters(){
         assertEquals("\"a\\\"b\\\\c\\nd\"",OrderJson.quote("a\"b\\c\nd"));
         assertEquals("\"\\u0001\"",OrderJson.quote("\u0001"));
+    }
+    @Test
+    void menuContainsDiscountOptions(){
+        String json=OrderJson.menu(factory);
+        assertTrue(json.contains("\"id\":\"HAPPY_HOUR\""));
+        assertTrue(json.contains("Happy hour"));
+    }
+    @Test
+    void orderShowsSubtotalDiscountAndTotal(){
+        Order order=new OrderBuilder(1)
+                .type(OrderType.TAKEAWAY)
+                .discount(new StudentDiscount())
+                .addMeal(factory.createMeal(MealType.PIZZA))
+                .addMeal(factory.createMeal(MealType.DRINK))
+                .build();
+        String json=OrderJson.order(order,List.of());
+        assertTrue(json.contains("\"subtotal\":4100"));
+        assertTrue(json.contains("\"discount\":410"));
+        assertTrue(json.contains("\"total\":3690"));
     }
 }

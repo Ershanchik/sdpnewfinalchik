@@ -1,4 +1,3 @@
-
 package com.restaurant.web;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -15,20 +14,20 @@ public final class FormData{
         if(body==null||body.isBlank()){
             return form;
         }
-        for(String pair:body.split("&")){
+        for(String pair : body.split("&")){
             if(pair.isEmpty()){
                 continue;
             }
             int eq=pair.indexOf('=');
-            String key=decode(eq<0?pair:pair.substring(0,eq));
-            String value=eq<0?"":decode(pair.substring(eq+1));
-            form.values.computeIfAbsent(key,k->new ArrayList<>()).add(value);
+            String key=decode(eq < 0 ? pair : pair.substring(0,eq));
+            String value=eq < 0 ? "" : decode(pair.substring(eq+1));
+            form.values.computeIfAbsent(key,k -> new ArrayList<>()).add(value);
         }
         return form;
     }
     public String get(String key,String defaultValue){
         List<String> list=values.get(key);
-        return list==null?defaultValue:list.get(0);
+        return list==null ? defaultValue : list.get(0);
     }
     public List<String> getAll(String key){
         return values.getOrDefault(key,List.of());
