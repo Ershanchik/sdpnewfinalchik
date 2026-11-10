@@ -99,4 +99,8 @@ class WebServerTest{
         assertEquals(delivered.body(),extra.body());
         assertEquals(extra.body(),get("/api/orders/1").body());
     }
+    @Test
+    void menuAcceptsOnlyGet() throws Exception{
+        assertEquals(405,post("/api/menu","").statusCode());
+    }
 }

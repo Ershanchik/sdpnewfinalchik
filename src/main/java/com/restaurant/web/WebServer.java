@@ -50,6 +50,10 @@ public class WebServer{
         }
     }
     private void handleMenu(HttpExchange exchange) throws IOException{
+        if(!exchange.getRequestMethod().equals("GET")){
+            send(exchange,405,OrderJson.error("Method not allowed"),JSON);
+            return;
+        }
         send(exchange,200,OrderJson.menu(facade::createMeal),JSON);
     }
     private void handleOrders(HttpExchange exchange) throws IOException{
