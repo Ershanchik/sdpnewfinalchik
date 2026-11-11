@@ -1,0 +1,32 @@
+@startuml
+skinparam shadowing false
+title Placing an order and moving it to the next status
+actor Customer
+participant ConsoleMenu
+participant RestaurantFacade
+participant MealFactory
+participant OrderBuilder
+participant Order
+participant KitchenDisplay
+participant CustomerNotifier
+Customer -> ConsoleMenu : choose meal, toppings, discount
+ConsoleMenu -> RestaurantFacade : createMeal(type, toppings)
+RestaurantFacade -> MealFactory : createMeal(type)
+MealFactory --> RestaurantFacade : Meal
+RestaurantFacade -> RestaurantFacade : wrap Meal in topping decorators
+RestaurantFacade --> ConsoleMenu : decorated Meal
+ConsoleMenu -> RestaurantFacade : placeOrder(type, table, comment, discount, meals)
+RestaurantFacade -> OrderBuilder : type, table, comment, discount, addMeal
+RestaurantFacade -> OrderBuilder : build()
+OrderBuilder --> RestaurantFacade : Order
+RestaurantFacade -> Order : addObserver(KitchenDisplay)
+RestaurantFacade -> Order : addObserver(CustomerNotifier)
+RestaurantFacade --> ConsoleMenu : Order
+Customer -> ConsoleMenu : Enter (next status)
+ConsoleMenu -> RestaurantFacade : advanceOrder(id)
+RestaurantFacade -> Order : advanceStatus()
+Order -> KitchenDisplay : onStatusChanged(order, oldStatus)
+Order -> CustomerNotifier : onStatusChanged(order, oldStatus)
+KitchenDisplay --> ConsoleMenu : "Kitchen: order #1 NEW -> COOKING"
+CustomerNotifier --> ConsoleMenu : "Customer: your order #1 is being prepared"
+@enduml

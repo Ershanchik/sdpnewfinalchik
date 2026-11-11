@@ -1,0 +1,117 @@
+@startuml
+!pragma layout smetana
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+title Restaurant Ordering System - class diagram
+package "model" {
+    interface Meal {
+        +getName(): String
+        +getDescription(): String
+        +getPrice(): double
+    }
+    abstract class BaseMeal
+    class Pizza
+    class Burger
+    class Pasta
+    class Drink
+    enum MealType
+    class Order {
+        +addMeal(Meal)
+        +getSubtotal(): double
+        +getDiscountAmount(): double
+        +getTotal(): double
+        +setStatus(OrderStatus)
+        +advanceStatus()
+        +addObserver(OrderObserver)
+    }
+    enum OrderStatus
+    enum OrderType
+    interface OrderObserver <<Observer>> {
+        +onStatusChanged(Order, OrderStatus)
+    }
+    interface DiscountStrategy <<Strategy>> {
+        +getName(): String
+        +calculateDiscount(List<Meal>): double
+    }
+    class NoDiscount
+}
+package "factory" {
+    class MealFactory <<Factory>> {
+        +createMeal(MealType): Meal
+    }
+}
+package "decorator" {
+    abstract class MealDecorator <<Decorator>>
+    class ExtraCheese
+    class Bacon
+    class Mushrooms
+    enum Topping
+}
+package "builder" {
+    class OrderBuilder <<Builder>> {
+        +type(OrderType)
+        +table(int)
+        +comment(String)
+        +discount(DiscountStrategy)
+        +addMeal(Meal)
+        +build(): Order
+    }
+}
+package "discount" {
+    class StudentDiscount
+    class HappyHourDiscount
+    class PromoCodeDiscount
+    enum DiscountOption
+}
+package "observer" {
+    class KitchenDisplay
+    class CustomerNotifier
+}
+package "facade" {
+    class RestaurantFacade <<Facade>> {
+        +createMeal(MealType, List<Topping>): Meal
+        +placeOrder(...): Order
+        +advanceOrder(int): Order
+        +getNotifications(int): List<String>
+    }
+}
+package "ui" {
+    class ConsoleMenu
+    class WebServer
+}
+BaseMeal ..|> Meal
+Pizza --|> BaseMeal
+Burger --|> BaseMeal
+Pasta --|> BaseMeal
+Drink --|> BaseMeal
+MealDecorator ..|> Meal
+MealDecorator o-- Meal : wraps
+ExtraCheese --|> MealDecorator
+Bacon --|> MealDecorator
+Mushrooms --|> MealDecorator
+Topping ..> MealDecorator : creates
+MealFactory ..> Meal : creates
+MealFactory ..> MealType
+Order o-- Meal
+Order --> OrderStatus
+Order --> OrderType
+Order o-- OrderObserver : observers
+Order --> DiscountStrategy
+KitchenDisplay ..|> OrderObserver
+CustomerNotifier ..|> OrderObserver
+NoDiscount ..|> DiscountStrategy
+StudentDiscount ..|> DiscountStrategy
+HappyHourDiscount ..|> DiscountStrategy
+PromoCodeDiscount ..|> DiscountStrategy
+DiscountOption ..> DiscountStrategy : creates
+OrderBuilder ..> Order : builds
+OrderBuilder --> DiscountStrategy
+RestaurantFacade --> MealFactory
+RestaurantFacade ..> OrderBuilder
+RestaurantFacade ..> Topping
+RestaurantFacade ..> DiscountOption
+RestaurantFacade ..> KitchenDisplay
+RestaurantFacade ..> CustomerNotifier
+ConsoleMenu --> RestaurantFacade
+WebServer --> RestaurantFacade
+@enduml
